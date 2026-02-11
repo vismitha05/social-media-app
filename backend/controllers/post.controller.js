@@ -33,7 +33,7 @@ export const createPost = async (req, res) => {
 
 
 //get all posts
-export const getAllPosts = async (_req, res) => {
+export const getAllPosts = async (req, res) => {
   try {
 
     const userId = req.user.userId;
@@ -136,23 +136,24 @@ export const toggleLikePost = async (req, res) => {
     } else {
       post.likes.push(userId);
     }
-    if(!alreadyLiked){
-      const postOwnerId = post.author.toString();
-      if(postOwnerId !== userId){
-        global.io.to(postOwnerId).emit("newNotification", {
-          type: "like",
-          message: "someone liked your post",
-          postId: post._id,
-      });
-    }
+    // if(!alreadyLiked){
+    //   const postOwnerId = post.author.toString();
+    //   if(postOwnerId !== userId){
+    //     global.io.to(postOwnerId).emit("newNotification", {
+    //       type: "like",
+    //       message: "someone liked your post",
+    //       postId: post._id,
+    //   });
+   // }
 
-    }
+    //}
     await post.save();
     res.status(200).json({
       message: alreadyLiked ? "post unliked" : "post liked",
       likesCount: post.likes.length,
     });
   }catch (error) {
+    console.log("like error:", error);
     res.status(500).json({
       message: "server error",
     });

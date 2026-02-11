@@ -1,16 +1,9 @@
 import express from "express";
-import authMiddleware from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/protected", authMiddleware, (req, res) => {
-    console.log("protected route hit")
-    res.json({
-        message: "you have access",
-        user: req.user,
-    });
+router.get("/", (req, res) => {
+  res.json({ message: "Test route working" });
 });
-
-
 
 export default router;
