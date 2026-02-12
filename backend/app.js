@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 // route imports
 import authRoutes from "./routes/auth.routes.js";
 import postRoutes from "./routes/post.routes.js";
-
+import testRoutes from "./routes/test.routes.js";
 import userRoutes from "./routes/user.routes.js";
 
 dotenv.config();
@@ -30,7 +30,7 @@ app.post("/api/posts/__probe", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/test", testRoutes);
-import testRoutes from "./routes/test.routes.js";
+
 app.use("/api/users", userRoutes);
 
 export default app;

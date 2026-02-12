@@ -7,6 +7,8 @@ function Feed() {
   const [text, setText] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
+  const [commentText, setCommentText] = useState({});
+
 
   const navigate = useNavigate();
 
@@ -87,11 +89,46 @@ function Feed() {
     }
   };
 
+  //comment on post
+  const handleAddComment = async (postId) => {
+  const text = commentText[postId];
+
+  if (!text || text.trim() === "") {
+    console.log("Comment empty");
+    return;
+  }
+
+  try {
+    await api.post(`/posts/${postId}/comment`, { text });
+
+    // refresh posts
+    const response = await api.get("/posts");
+    setPosts(response.data.posts);
+
+    // clear input
+    setCommentText((prev) => ({
+      ...prev,
+      [postId]: "",
+    }));
+
+  } catch (error) {
+    console.error("Error adding comment:", error);
+  }
+};
+
+
   // Logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     navigate("/login");
   };
+  <button
+  onClick={() => navigate("/profile")}
+  className="px-4 py-2 bg-gray-200 rounded-xl hover:bg-gray-300 transition"
+>
+  Profile
+</button>
+
 
   return (
     <div className="p-10">
@@ -152,6 +189,48 @@ function Feed() {
                 ❤️ {post.likeCount || 0} Likes | 💬 {post.commentsCount || 0} Comments
               </div>
             </div>
+
+            {/* Comments Section */}
+<div className="mt-4">
+
+  {post.comments && post.comments.length > 0 && (
+    <div className="space-y-2 mb-3">
+      {post.comments.map((comment) => (
+        <div
+          key={comment._id}
+          className="bg-gray-100 p-2 rounded-lg text-sm"
+        >
+          {comment.text}
+        </div>
+      ))}
+    </div>
+  )}
+
+  {/* Comment Input */}
+  <div className="flex gap-2">
+    <input
+      type="text"
+      value={commentText[post._id] || ""}
+      onChange={(e) =>
+        setCommentText((prev) => ({
+          ...prev,
+          [post._id]: e.target.value,
+        }))
+      }
+      placeholder="Write a comment..."
+      className="flex-1 p-2 border rounded-lg text-sm"
+    />
+
+    <button
+      onClick={() => handleAddComment(post._id)}
+      className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm"
+    >
+      Add
+    </button>
+  </div>
+
+</div>
+
 
             {/* Delete Button (Only Author) */}
             {post.author === currentUserId && (
