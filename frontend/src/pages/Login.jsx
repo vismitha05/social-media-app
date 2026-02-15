@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import AuthLayout from "../components/AuthLayout";
+
 
 function Login() {
   const navigate = useNavigate();
@@ -8,7 +10,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -27,61 +29,59 @@ function Login() {
       setError("Invalid email or password");
     }
   };
+return (
+  <AuthLayout>
+    <h2 className="text-2xl font-bold text-center mb-2">
+      Welcome Back
+    </h2>
 
-  return (
-    <div className="auth-container">
-      <div className="auth-card">
+    <p className="text-gray-500 text-center mb-6">
+      Login to your account
+    </p>
 
-        <h2 className="auth-title">Welcome Back</h2>
-        <p className="auth-subtitle">Login to your account</p>
+    {error && (
+      <p className="text-red-500 text-sm text-center mb-4">
+        {error}
+      </p>
+    )}
 
-        {error && (
-          <p className="text-red-500 text-sm mt-3 text-center">
-            {error}
-          </p>
-        )}
+    <form onSubmit={handleSubmit} className="space-y-4">
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+      <input
+        type="email"
+        placeholder="Email"
+        className="w-full p-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              type="email"
-              className="auth-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
+      <input
+        type="password"
+        placeholder="Password"
+        className="w-full p-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              type="password"
-              className="auth-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+      <button
+        type="submit"
+        className="w-full py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition"
+      >
+        Login
+      </button>
 
-          <button type="submit" className="auth-button">
-            Login
-          </button>
-        </form>
+    </form>
 
-        <p className="text-center text-sm text-gray-600 mt-6">
-          Don't have an account?{" "}
-          <Link to="/register" className="auth-link">
-            Register
-          </Link>
-        </p>
+    <p className="text-center text-sm text-gray-600 mt-6">
+      Don't have an account?{" "}
+      <Link to="/register" className="text-blue-500 hover:underline">
+        Register
+      </Link>
+    </p>
+  </AuthLayout>
+);
 
-      </div>
-    </div>
-  );
+  
 }
 
 export default Login;
