@@ -1,31 +1,36 @@
 import User from "../models/User.js";
 
+// get updsted profile
 export const updateProfile = async (req, res) => {
-    try {
-        const userId = req.user.userId;
-        const { bio } = req.body;
-        const avatar = req.file ? req.file.path : undefined;
+  try {
+    const userId = req.user.userId;
+    const { bio } = req.body;
 
-        const updatedUser = await User.findByIdAndUpdate(
-            userId,
-            {
-                bio,
-                ...(avatar && {avatar}),
-            },
-            { new: true}
-        ).select("-password");
+    let avatar = undefined;
 
-        res.status(200).json({
-            message: "profile updated successfully",
-            user: updatedUser,
-        });
-    }catch (error) {
-        res.status(500).json({
-            message: "unable to update profile",
-        });
+    if (req.file) {
+      // Convert image to base64 for now (simple approach)
+      avatar = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
     }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        bio,
+        ...(avatar && { avatar }),
+      },
+      { new: true }
+    ).select("-password");
+
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    console.log("UPDATE PROFILE ERROR:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 };
 
+
+// get user profile by username
 export const getUserProfile = async (req, res) => {
     try {
         const { username } = req.params;
@@ -49,6 +54,7 @@ export const getUserProfile = async (req, res) => {
     }
 };
 
+// search for users
 export const searchUsers = async (req, res) => {
     try{
         const { q } = req.query;
@@ -96,6 +102,7 @@ export const searchUsers = async (req, res) => {
 }
 };
 
+//get current user 
 export const getCurrentUser = async (req, res) => {
   try {
     const userId = req.user.userId;

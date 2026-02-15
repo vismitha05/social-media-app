@@ -9,6 +9,6 @@ const router = express.Router();
 router.put("/profile", authMiddleware, upload.single("avatar"), updateProfile);
 router.get("/search", authMiddleware, searchUsers);
 router.get("/:username", authMiddleware, getUserProfile);
-router.get("/me", authMiddleware, getCurrentUser);
+router.put("/me", authMiddleware, upload.single("avatar"), updateProfile);
 
 export default router;
