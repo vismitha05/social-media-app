@@ -15,7 +15,7 @@ const io = new Server(server, {
   },
 });
 
-global.io = io; // make io accessible anywhere
+global.io = io;
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
