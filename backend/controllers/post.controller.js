@@ -1,32 +1,110 @@
 import Post from "../models/Post.js";
+import Connection from "../models/Connection.js";
+import User from "../models/User.js";
+
+const MENTION_REGEX = /(^|\s)@([a-zA-Z0-9_.]+)/g;
+const HASHTAG_REGEX = /(^|\s)#([a-zA-Z0-9_]+)/g;
+
+const extractUniqueTokens = (value = "", regex) => {
+  const matches = [...value.matchAll(regex)];
+  return [...new Set(matches.map((match) => match[2].toLowerCase()))];
+};
+
+const buildOptimizedPost = (post, userId) => {
+  const mediaUrl = post.mediaUrl || post.imageUrl || null;
+  const mediaType = post.mediaType || (post.imageUrl ? "image" : null);
+  const captionText = post.caption || post.text || "";
+
+  return {
+    _id: post._id,
+    text: post.text || captionText,
+    caption: captionText,
+    imageUrl: post.imageUrl || (mediaType === "image" ? mediaUrl : null),
+    mediaUrl,
+    mediaType,
+    hashtags: post.hashtags || [],
+    mentions: (post.mentions || []).map((id) => id.toString()),
+    mentionUsernames: post.mentionUsernames || [],
+    createdAt: post.createdAt,
+    visibility: post.visibility,
+    author: post.author,
+    comments: (post.comments || []).map((comment) => ({
+      _id: comment._id,
+      text: comment.text,
+      user: comment.user?.toString(),
+    })),
+    likeCount: post.likes?.length || 0,
+    commentsCount: post.comments?.length || 0,
+    isLiked: (post.likes || []).some((id) => id.toString() === userId),
+  };
+};
 
 
 //create post
 export const createPost = async (req, res) => {
   try {
-    const { text } = req.body;
-    const imageUrl = req.file ? req.file.path : null;
+    const { text = "", caption = "", visibility } = req.body;
+    const uploadedFile =
+      req.file || req.files?.media?.[0] || req.files?.image?.[0] || null;
+    const mediaUrl = uploadedFile ? (uploadedFile.path || uploadedFile.secure_url) : null;
+    const mimeType = uploadedFile?.mimetype || "";
+    const resourceType = uploadedFile?.resource_type || "";
+    const mediaType = mediaUrl
+      ? resourceType === "video" || mimeType.startsWith("video")
+        ? "video"
+        : "image"
+      : null;
+    const imageUrl = mediaType === "image" ? mediaUrl : null;
     const userId = req.user.userId;
+    const validVisibility =
+      visibility === "connections" ? "connections" : "public";
+    const normalizedText = text.trim();
+    const normalizedCaption = caption.trim() || normalizedText;
 
-    if (!text && !imageUrl) {
+    if (!normalizedText && !normalizedCaption && !mediaUrl) {
       return res.status(400).json({
-        message: "post must contain text or image",
+        message: "post must contain text/caption or media",
       });
     }
+    const mentionCandidates = extractUniqueTokens(normalizedCaption, MENTION_REGEX);
+    const hashtags = extractUniqueTokens(normalizedCaption, HASHTAG_REGEX);
+
+    const mentionedUsers = mentionCandidates.length
+      ? await User.find({
+          username: { $in: mentionCandidates },
+        })
+          .select("_id username")
+          .lean()
+      : [];
 
     const newPost = await Post.create({
-      text,
+      text: normalizedText || normalizedCaption,
+      caption: normalizedCaption,
       imageUrl,
+      mediaUrl,
+      mediaType,
+      hashtags,
+      mentions: mentionedUsers.map((user) => user._id),
+      mentionUsernames: mentionedUsers.map((user) => user.username),
       author: userId,
+      visibility: validVisibility,
     });
+
+    const populatedPost = await Post.findById(newPost._id)
+      .select(
+        "text caption imageUrl mediaUrl mediaType hashtags mentions mentionUsernames author likes comments createdAt visibility"
+      )
+      .populate("author", "username avatar")
+      .lean();
 
     res.status(201).json({
       message: "Post created successfully...hurray!!",
-      post: newPost,
+      post: buildOptimizedPost(populatedPost, userId),
     });
   } catch (error) {
+    console.log("CREATE POST ERROR:", error);
     res.status(500).json({
-      message: "unable to create post, try after some time",
+      message: error?.message || "unable to create post, try after some time",
     });
   }
 };
@@ -37,31 +115,50 @@ export const getAllPosts = async (req, res) => {
   try {
 
     const userId = req.user.userId;
+    const acceptedConnections = await Connection.find({
+      status: "accepted",
+      $or: [{ senderId: userId }, { receiverId: userId }],
+    }).select("senderId receiverId");
+
+    const connectionIds = acceptedConnections.map((connection) =>
+      connection.senderId.toString() === userId
+        ? connection.receiverId
+        : connection.senderId
+    );
     //read pagination values 
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 5;
     const skip = (page - 1) * limit;
 
     //fetch posts with pagination
-    const posts = await Post.find({ isDeleted: false})
-    .populate("author", "username bio avatar")
+    const posts = await Post.find({
+      isDeleted: false,
+      $or: [
+        { author: userId },
+        { visibility: "public" },
+        { visibility: "connections", author: { $in: connectionIds } },
+      ],
+    })
+    .select(
+      "text caption imageUrl mediaUrl mediaType hashtags mentions mentionUsernames author likes comments createdAt visibility"
+    )
+    .populate("author", "username avatar")
     .sort({ createdAt: -1})
     .skip(skip)
     .limit(limit)
     .lean();
 
-    const optimizedPosts = posts.map((post) => ({
-      
-        ...post,
-        likeCount: post.likes.length,
-        commentsCount: post.comments.length,
-        isLiked: post.likes.some(
-          (id) => id.toString() === userId
-      ),
-    }));
+    const optimizedPosts = posts.map((post) => buildOptimizedPost(post, userId));
 
     //count total posts
-    const totalPosts = await Post.countDocuments({ isDeleted: false});
+    const totalPosts = await Post.countDocuments({
+      isDeleted: false,
+      $or: [
+        { author: userId },
+        { visibility: "public" },
+        { visibility: "connections", author: { $in: connectionIds } },
+      ],
+    });
 
     res.status(200).json({
       message: "Posts fetched successfully",
@@ -188,6 +285,15 @@ export const addComment = async (req, res) => {
 
     await post.save();
 
+    const postOwnerId = post.author.toString();
+    if (postOwnerId !== userId && global.io) {
+      global.io.to(postOwnerId).emit("notification", {
+        type: "comment",
+        message: "Someone commented on your post",
+        postId: post._id,
+      });
+    }
+
     res.status(201).json({
       message: "Comment added successfully",
       commentsCount: post.comments.length,
@@ -197,18 +303,9 @@ export const addComment = async (req, res) => {
       message: "Server error",
     });
   }
-  const postOwnerId = post.author.toString();
-
-if (postOwnerId !== userId) {
-  global.io.to(postOwnerId).emit("notification", {
-    type: "comment",
-    message: "Someone commented on your post",
-    postId: post._id,
-  });
-}
-
 };
 
+//delete comment 
 export const deleteComment = async (req, res) => {
   try {
     const { postId, commentId } = req.params;
@@ -246,6 +343,64 @@ export const deleteComment = async (req, res) => {
     res.status(500).json({
       message: "Server error",
     });
+  }
+};
+
+//update post
+export const updatePost = async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const userId = req.user.userId;
+    const { text = "", caption = "" } = req.body;
+    const normalizedText = text.trim();
+    const normalizedCaption = caption.trim() || normalizedText;
+
+    const post = await Post.findById(postId);
+
+    if (!post || post.isDeleted) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (post.author.toString() !== userId) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    post.text = normalizedText || normalizedCaption;
+    post.caption = normalizedCaption;
+
+    const mentionCandidates = extractUniqueTokens(normalizedCaption, MENTION_REGEX);
+    const hashtags = extractUniqueTokens(normalizedCaption, HASHTAG_REGEX);
+
+    const mentionedUsers = mentionCandidates.length
+      ? await User.find({
+          username: { $in: mentionCandidates },
+        })
+          .select("_id username")
+          .lean()
+      : [];
+
+    post.hashtags = hashtags;
+    post.mentions = mentionedUsers.map((user) => user._id);
+    post.mentionUsernames = mentionedUsers.map((user) => user.username);
+
+    await post.save();
+
+    res.status(200).json({
+      message: "Post updated",
+      post: buildOptimizedPost(
+        await Post.findById(post._id)
+          .select(
+            "text caption imageUrl mediaUrl mediaType hashtags mentions mentionUsernames author likes comments createdAt visibility"
+          )
+          .populate("author", "username avatar")
+          .lean(),
+        userId
+      ),
+    });
+
+  } catch (error) {
+    console.log("UPDATE POST ERROR:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

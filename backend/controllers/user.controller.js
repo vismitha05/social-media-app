@@ -9,8 +9,7 @@ export const updateProfile = async (req, res) => {
     let avatar = undefined;
 
     if (req.file) {
-      // Convert image to base64 for now (simple approach)
-      avatar = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      avatar = req.file.path || req.file.secure_url;
     }
 
     const updatedUser = await User.findByIdAndUpdate(
